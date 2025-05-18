@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fight Pit</title>
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 10px;
+      width: 800px;
+      height: 800px;
+      box-sizing: border-box;
+    }
+    canvas {
+      background: #222;
+      border: 2px solid white;
+      display: block;
+      margin: 20px auto;
+    }
+    input, button {
+      padding: 8px;
+      font-size: 16px;
+      margin-top: 10px;
+      width: 680px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fight Pit</h1>
+  <p>Enter player names, separated by commas:</p>
+  <input type="text" id="names" placeholder="e.g. Alice, Bob, Charlie" />
+  <br />
+  <button id="start-btn">Start Fight</button>
+  <canvas id="fightpit" width="700" height="700"></canvas>
+
+  <script src="game.js"></script>
+</body>
+</html>
