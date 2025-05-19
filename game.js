@@ -12,7 +12,7 @@ let orbTypes = ['strength', 'speed', 'lucky', 'freeze', 'invisible', 'clone', 's
 let lastOrbSpawn = 0;
 const ORB_SPAWN_INTERVAL = 5000;
 const ORB_EFFECT_DURATION = 600;
-const BLAST_EFFECT_DURATION = 60; // 1 second at 60fps
+const BLAST_EFFECT_DURATION = 60;
 
 function startGame() {
   const names = document.getElementById('names').value.split(',').map(n => n.trim()).filter(n => n);
@@ -24,7 +24,11 @@ function startGame() {
     vy: 0,
     alive: true,
     color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
-    orbEffects: { strength: 0, speed: 0, lucky: 0, freeze: 0, invisible: 0, clone: 0, shield: 0, blast: 0 },
+    orbEffects: {
+      strength: 0, speed: 0, lucky: 0, freeze: 0,
+      invisible: 0, clone: 0, shield: 0, blast: 0,
+      freezePower: 0 // NEW: power to freeze others
+    },
     clones: []
   }));
   critMessages = [];
@@ -40,9 +44,8 @@ function distance(a, b) {
 function getNearestEnemy(player, exclude = []) {
   let nearest = null, minDist = Infinity;
   for (const other of players) {
-    if (other === player || !other.alive) continue;
-    if (exclude.includes(other)) continue;
-    if (other.orbEffects.invisible > 0) continue; // Ignore invisible enemies
+    if (other === player || !other.alive || exclude.includes(other)) continue;
+    if (other.orbEffects.invisible > 0) continue;
     const dist = distance(player, other);
     if (dist < minDist) {
       minDist = dist;
@@ -60,11 +63,11 @@ function getNearbyOrb(player) {
 }
 
 function spawnOrb() {
-  let angle = Math.random() * Math.PI * 2;
-  let radius = Math.random() * (STAGE_RADIUS - ORB_RADIUS);
-  let x = canvas.width / 2 + Math.cos(angle) * radius;
-  let y = canvas.height / 2 + Math.sin(angle) * radius;
-  let type = orbTypes[Math.floor(Math.random() * orbTypes.length)];
+  const angle = Math.random() * Math.PI * 2;
+  const radius = Math.random() * (STAGE_RADIUS - ORB_RADIUS);
+  const x = canvas.width / 2 + Math.cos(angle) * radius;
+  const y = canvas.height / 2 + Math.sin(angle) * radius;
+  const type = orbTypes[Math.floor(Math.random() * orbTypes.length)];
   orbs.push({ x, y, type });
 }
 
@@ -131,14 +134,13 @@ function drawClones(player) {
 
 function updateClones(player) {
   if (player.orbEffects.clone <= 0 || !player.clones) {
-    player.clones = []; // Clear clones when effect ends
+    player.clones = [];
     return;
   }
 
   for (const clone of player.clones) {
     if (!clone.alive) continue;
 
-    // Find nearest enemy excluding owner and clones
     const enemy = getNearestEnemy(clone, [player, ...player.clones]);
     if (enemy) {
       const dx = enemy.x - clone.x;
@@ -146,30 +148,24 @@ function updateClones(player) {
       const dist = Math.hypot(dx, dy);
 
       if (dist > 0.1) {
-        const speed = 0.7; // clones move speed
+        const speed = 0.7;
         clone.vx += (dx / dist) * speed;
         clone.vy += (dy / dist) * speed;
       }
 
       if (enemy.alive && dist < PLAYER_RADIUS * 2) {
-        // Attack enemy with knockback
         const knockback = 10;
         const angle = Math.atan2(dy, dx);
         enemy.vx += Math.cos(angle) * knockback;
         enemy.vy += Math.sin(angle) * knockback;
-
-        // Freeze enemy for 5 seconds (150 frames)
-        enemy.orbEffects.freeze = 150;
       }
     }
 
-    // Move clone & apply friction
     clone.x += clone.vx;
     clone.y += clone.vy;
     clone.vx *= 0.9;
     clone.vy *= 0.9;
 
-    // Kill clone if out of bounds
     const dx = clone.x - canvas.width / 2;
     const dy = clone.y - canvas.height / 2;
     if (Math.hypot(dx, dy) > STAGE_RADIUS) {
@@ -181,14 +177,12 @@ function updateClones(player) {
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Draw stage boundary
   ctx.beginPath();
   ctx.arc(canvas.width / 2, canvas.height / 2, STAGE_RADIUS, 0, Math.PI * 2);
   ctx.strokeStyle = 'white';
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Spawn orbs periodically
   if (performance.now() - lastOrbSpawn > ORB_SPAWN_INTERVAL) {
     spawnOrb();
     lastOrbSpawn = performance.now();
@@ -199,23 +193,19 @@ function gameLoop() {
   for (const p of players) {
     if (!p.alive) continue;
 
-    // Decrease orb effect durations
     for (let effect in p.orbEffects) {
       if (p.orbEffects[effect] > 0) p.orbEffects[effect]--;
     }
 
-    // Update clones (move, attack)
     updateClones(p);
 
-    // Check orb pickup
     for (let i = orbs.length - 1; i >= 0; i--) {
       const orb = orbs[i];
       if (distance(p, orb) < PLAYER_RADIUS + ORB_RADIUS) {
         if (orb.type === 'blast') {
-          p.orbEffects[orb.type] = BLAST_EFFECT_DURATION;
+          p.orbEffects.blast = BLAST_EFFECT_DURATION;
         } else if (orb.type === 'clone') {
           p.orbEffects.clone = ORB_EFFECT_DURATION;
-          // Spawn 4 clones around player
           p.clones = [];
           for (let c = 0; c < 4; c++) {
             let angle = (Math.PI * 2 / 4) * c;
@@ -228,6 +218,8 @@ function gameLoop() {
               alive: true
             });
           }
+        } else if (orb.type === 'freeze') {
+          p.orbEffects.freezePower = ORB_EFFECT_DURATION;
         } else {
           p.orbEffects[orb.type] = ORB_EFFECT_DURATION;
         }
@@ -235,13 +227,11 @@ function gameLoop() {
       }
     }
 
-    // If frozen, no player movement input but can be pushed
     if (p.orbEffects.freeze > 0) {
       p.x += p.vx;
       p.y += p.vy;
       p.vx *= 0.9;
       p.vy *= 0.9;
-
       const dx = p.x - canvas.width / 2;
       const dy = p.y - canvas.height / 2;
       if (Math.hypot(dx, dy) > STAGE_RADIUS) {
@@ -249,7 +239,6 @@ function gameLoop() {
         continue;
       }
 
-      // Draw frozen player
       ctx.beginPath();
       ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = 'lightblue';
@@ -258,13 +247,10 @@ function gameLoop() {
       ctx.fillStyle = 'white';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-
-      // Draw clones if any
       drawClones(p);
       continue;
     }
 
-    // Blast orb pushes nearby players
     if (p.orbEffects.blast > 0) {
       for (const other of players) {
         if (other === p || !other.alive) continue;
@@ -272,15 +258,13 @@ function gameLoop() {
         const dy = other.y - p.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 0 && dist <= 100) {
-          const pushForce = 10;  // Reduced from 50 to 10
+          const pushForce = 10;
           other.vx += (dx / dist) * pushForce;
           other.vy += (dy / dist) * pushForce;
         }
       }
     }
 
-
-    // Target: nearby orb or nearest enemy (not invisible)
     let target = getNearbyOrb(p) || getNearestEnemy(p);
 
     if (target) {
@@ -296,7 +280,6 @@ function gameLoop() {
         p.vy += (dy / dist) * speed;
       }
 
-      // Attack target if close and not invisible
       if ('alive' in target && target.alive && dist < PLAYER_RADIUS * 2) {
         if (target.orbEffects.invisible <= 0) {
           const baseCritChance = 0.01;
@@ -306,15 +289,13 @@ function gameLoop() {
 
           let knockback = isCrit ? 100 : (Math.random() * 9.9 + 0.1);
           if (p.orbEffects.strength > 0 && !isCrit) knockback *= 2;
-
           if (target.orbEffects.shield > 0) knockback *= 0.5;
 
           const angle = Math.atan2(dy, dx);
           target.vx += Math.cos(angle) * knockback;
           target.vy += Math.sin(angle) * knockback;
 
-          // FIXED: Freeze the target if attacker has freeze orb
-          if (p.orbEffects.freeze > 0) {
+          if (p.orbEffects.freezePower > 0 && players.includes(p)) {
             target.orbEffects.freeze = 300;
           }
 
@@ -323,13 +304,11 @@ function gameLoop() {
       }
     }
 
-    // Move player & apply friction
     p.x += p.vx;
     p.y += p.vy;
     p.vx *= 0.9;
     p.vy *= 0.9;
 
-    // Kill if outside stage radius
     const dx = p.x - canvas.width / 2;
     const dy = p.y - canvas.height / 2;
     if (Math.hypot(dx, dy) > STAGE_RADIUS) {
@@ -337,7 +316,6 @@ function gameLoop() {
       continue;
     }
 
-    // Draw player
     ctx.beginPath();
     ctx.arc(p.x, p.y, PLAYER_RADIUS, 0, Math.PI * 2);
     ctx.fillStyle = p.orbEffects.freeze > 0 ? 'lightblue' : p.color;
@@ -348,12 +326,11 @@ function gameLoop() {
     ctx.textAlign = 'center';
     ctx.fillText(p.name, p.x, p.y - PLAYER_RADIUS - 5);
 
-    // Draw orb effect indicators
     const effects = [];
     if (p.orbEffects.strength > 0) effects.push('S');
     if (p.orbEffects.speed > 0) effects.push('P');
     if (p.orbEffects.lucky > 0) effects.push('L');
-    if (p.orbEffects.freeze > 0) effects.push('F');
+    if (p.orbEffects.freezePower > 0) effects.push('F');
     if (p.orbEffects.invisible > 0) effects.push('I');
     if (p.orbEffects.clone > 0) effects.push('C');
     if (p.orbEffects.shield > 0) effects.push('H');
@@ -363,13 +340,11 @@ function gameLoop() {
       ctx.fillText(effects.join(''), p.x, p.y - PLAYER_RADIUS - 20);
     }
 
-    // Draw clones
     drawClones(p);
   }
 
   drawCritMessages();
 
-  // Check if only one or zero players alive -> game ends
   const alive = players.filter(p => p.alive);
   if (alive.length <= 1) {
     ctx.fillStyle = 'yellow';
