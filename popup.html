@@ -21,11 +21,24 @@
       display: block;
       margin: 20px auto;
     }
-    input, button {
+    input, button, select {
       padding: 8px;
       font-size: 16px;
       margin-top: 10px;
       width: 680px;
+      box-sizing: border-box;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .control-group {
+      width: 680px;
+      margin: 10px auto;
+      display: flex;
+      justify-content: space-between;
+    }
+    .control-group > * {
+      width: 48%; /* Adjust for spacing */
       box-sizing: border-box;
     }
   </style>
@@ -34,7 +47,22 @@
   <h1>Fight Pit</h1>
   <p>Enter player names, separated by commas:</p>
   <input type="text" id="names" placeholder="e.g. Alice, Bob, Charlie" />
-  <br />
+  
+  <div class="control-group">
+      <select id="game-mode">
+          <option value="freeforall">Free-for-All</option>
+          <option value="teamdeathmatch">Team Deathmatch</option>
+          <option value="teamswap">Team Swap</option>
+          <option value="crown">Crown Runner</option>
+          <option value="potato">Potato Mode</option>
+          <option value="juggernaut">Juggernaut Mode</option>
+          </option>
+      </select>
+    <input type="number" id="num-teams" value="2" min="2" max="8" placeholder="Number of Teams (Team Modes)" />
+  </div>
+  
+  <input type="number" id="timer-duration" value="60" min="1" placeholder="Timer Duration in Seconds (Crown/Potato Mode)" />
+
   <button id="start-btn">Start Fight</button>
   <canvas id="fightpit" width="700" height="700"></canvas>
 
